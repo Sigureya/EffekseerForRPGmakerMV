@@ -76,7 +76,7 @@ class Sprite_Effekseer extends PIXI.EffekseerEmitter{
     }
     // isPlayingと合わせて、Sprite_Animationのふりをするための処理
     remove(){
-        this;
+        console.log('remove:'+this._frame);
         if(this.parent){
             this.parent.removeChild(this);
         }
@@ -84,132 +84,43 @@ class Sprite_Effekseer extends PIXI.EffekseerEmitter{
 
 
     _update(){
-        const handle = this.handle;
         super._update();
-        if(handle !==this.handle && this.isLoaded){
-            if(this._target){
-                const pos = this._target.effekseerTargetPosition();
-                this.setPosition( pos.x,pos.y,0);
-            }
-        }
         this._frame +=1;
-        console.log(this._frame);
     }
+    // 嘘実装
     isPlaying(){
-        var b = super.isPlaying();
-        if(!b && this._frame <4){
-            this;
-        }
-        return b;
-    }
-
-
-    update(){
-    }
-    setPosition(x,y,z){
-        super.setPosition(x,-y,z);
+        return this._frame <90;
     }
     setTargetBattler(battler){
         this._target =battler;
-
     }
 
 
 };
-
-class StandbyEffect{
-    constructor(efk,onLoadFunc){
-        this.effect = efk;
-        this.func=onLoadFunc;
-        this.funcCalled =false;
-    }
-    update(){
-//        this.effect._handleBind();
-        if(this.effect.handle!=null){
-            this.func(this.effect);
-            this.funcCalled=true;
-        }
-    }
-}
 
 class EffekseerRenderer_ForRPGmakerMV extends PIXI.EffekseerRenderer{
     constructor(){
         super();
     }
-    _init(){
-        super._init();
-        const m = new PIXI.Matrix();
-        const r =0;
-        const e = effekseer;
-        const core = effekseer.getCore();
-        effekseer.setCameraMatrix(
-        [
-          1,0,0,0,
-          0,1,0,0,
-          0,0,1,0,
-          -Graphics.boxWidth/2 ,Graphics.boxHeight/2 ,0,1
-        ]
-      );
-    }
-/*
-戦闘中限定ですが、敵の座標で表示する処理はできました。
-setCameraMatrixで平行移動x,yに
--Graphics.boxWidth/2 ,Graphics.boxHeight/2 を設定し、
-左上原点で表示するように調整していますが、上下部分だけ-yにして処理しているので修正したいです。
-X軸で180度回転してY軸を反転するつもりですが、この辺の行列処理はeffekseerの範囲外ですか？
-
-effekseerにはsetTargetLocation()がありますが、laser1はこれを呼んでも何もないように見えます。
-emitterがtargetを持つかどうかを取得することはできますか？
-
-
-*/ 
 
 };
 
 class EffekseerManagerClass  {
   constructor(){
-   this._standby =[];
-   this._playing=[];
   }
 
-  intiRPGmakerMV_camera(){
 
-  }
 
-  addEffect(efk,onLoadFunc){
-      this._standby.push(
-          new StandbyEffect(efk,onLoadFunc)
-      );
-  }
-
-  isBusy(){
-
-  }
-
-  reserveEffect(filePath,onLoadFunc,parent){
-    const efk = new Sprite_Effekseer  (filePath);
-    const p = parent || SceneManager._scene;
-    p.addChild(efk);
-
-    this._standby.push(new StandbyEffect(efk,onLoadFunc));
-  }
   toFilePath(name){
     return 'Resource/'+name +'.efk';
   }
   
-  update(){
-      this._standby = this._standby.filter( function(v){
-          v.update();
-          if(!v.funcCalled){
-              this._playing.push(v.effect);
-          }
-          return !v.funcCalled;
-      }.bind(this) );
-      this;
-
-  }
+  update(){}
 };
-
+const Scene_Base_create=Scene_Base.prototype.create;
+Scene_Base.prototype.create = function(){
+    Scene_Base_create.call(this);
+};
 
 const Scene_Base_createWindowLayer =Scene_Base.prototype.createWindowLayer;
 Scene_Base.prototype.createWindowLayer =function(){
@@ -217,9 +128,15 @@ Scene_Base.prototype.createWindowLayer =function(){
     this.createEffekseerLayer();
 };
 Scene_Base.prototype.createEffekseerLayer =function(){
-    if(effekseerRendererObject){
+    if(effekseerRendererObject){        
         this.addChild(effekseerRendererObject);
     }
+};
+
+// これ、何かに使うかもしれない
+Scene_Base.prototype.addEFK=function(efk){
+//    this._effekseerLayer.addChild(efk);
+
 };
 
 const Scene_Base_update=Scene_Base.prototype.update;
@@ -229,13 +146,10 @@ Scene_Base.prototype.update =function(){
 };
 const EffekseerManager = new EffekseerManagerClass();
 const effekseerRendererObject = new EffekseerRenderer_ForRPGmakerMV();
-//var effekseerRendererObject =null;
 const zz_Scene_Boot_loadSystemImages = Scene_Boot.loadSystemImages;
 Scene_Boot.loadSystemImages= function() {
     zz_Scene_Boot_loadSystemImages.apply(this,arguments);
     effekseer.init(Graphics._renderer.gl);
- //   effekseerRendererObject = Effek;
-//    effekseerRendererObject.setCameraMatrix();
 };
 
 const Game_CharacterBase_initMembers =Game_CharacterBase.prototype.initMembers;
@@ -247,9 +161,7 @@ Game_CharacterBase.prototype.startEffekseer =function(){
     this._effekseer=null;
     this._animationPlaying=true;
 };
-// Game_CharacterBase.prototype.endEffekseer =function(){
-//     this._effekseerPlaying =false;
-// };
+
 Game_CharacterBase.prototype.requestEffekseer =function(name){
     this._effekseer=name;
 };
@@ -265,16 +177,14 @@ Sprite_Character.prototype.update= function(){
 Sprite_Character.prototype.startEffekseer =function(filePath){
     const efk = new Sprite_Effekseer(filePath);
     this.parent.addChild(efk);
-    const x= this.x;
+    const x = this.x;
     const y = this.y;
-    EffekseerManager.addEffect(efk,function(e){
-//        e.setLocation(x,y,0 );
-    },x,y);
+    efk.setPosition(x,y);
     this._animationSprites.push(efk);
 };
 Sprite_Character.prototype.setupEffekseer=function(){
     if(this._character._effekseer){
-        this.startEffekseer (EffekseerManager.toFilePath( this._character._effekseer ) );        
+        this.startEffekseer (EffekseerManager.toFilePath( this._character._effekseer ) );
         this._character.startEffekseer();
     }
 };
@@ -285,13 +195,13 @@ Sprite_Character.prototype.updateEffekseer=function(){
 const Game_Interpreter_updateWaitMode =Game_Interpreter.prototype.updateWaitMode;
 Game_Interpreter.prototype.updateWaitMode =function(){
     var result =false;
-    // if(this._waitMode ===effekseerStr){
-    //     result =  this._character.isEffekseerPlaying();
-    //     if(!result){
-    //         this._waitMode ='';
-    //     }
-    //     return result;
-    // }
+    if(this._waitMode ===effekseerStr){
+        result =  this._character.isEffekseerPlaying();
+        if(!result){
+            this._waitMode ='';
+        }
+        return result;
+    }
     return  Game_Interpreter_updateWaitMode.call(this) ;
 };
 
@@ -348,19 +258,12 @@ class Window_efkSelect extends Window_Command{
 
 
 
-function setPosXX(efk){
-    efk.setPosition(100,0,0);
 
-    efk.setRotation(90,0,0);    
-}
 class Scene_EffekseerTest extends Scene_ItemBase{
     constructor(){
         super();
         this._effect =[];
         this.count=0;
-    }
-    update(){
-        super.update();        
     }
     createEnemy(){
         this._rootSprite =new Sprite_Base();
@@ -378,7 +281,7 @@ class Scene_EffekseerTest extends Scene_ItemBase{
     create(){
         super.create();
         this.createEffectSelectWindow();
-        this.createEnemy();
+//        this.createEnemy();
     }
 
     createEffectSelectWindow(){
@@ -395,11 +298,8 @@ class Scene_EffekseerTest extends Scene_ItemBase{
     onEffectOK(){
         this._effectSelectWindow.activate();
         const fileName = this._effectSelectWindow.currentSymbol();
-        EffekseerManager.reserveEffect(fileName,function(e){
-            const w= Graphics.boxWidth;
-            const h= Graphics.boxHeight;
-//            e.setPosition(w/2,h/2,0);
-        });
+        const efk = new Sprite_Effekseer(fileName);
+        this.addEFK(efk);
     }
 };
 
@@ -503,14 +403,8 @@ Scene_Battle.prototype.onEffectOK =function(){
     this._effectSelectWindow.activate();
     const fileName = this._effectSelectWindow.currentSymbol();
     const enemy = $gameTroop.members()[0];
-    EffekseerManager.reserveEffect(fileName,function(efk){
-        const pos = enemy.effekseerTargetPosition();
-//        efk.setTargetBattler(enemy);
-        efk.setPosition(pos.x,pos.y,0);
-//        efk.setPosition(pos.x,0,0);
-//        efk.setRotation(180,90,0);
-
-    }.bind(enemy));
+    const efk =new Sprite_Effekseer(fileName);
+    this.addEFK(efk);
 };
 //完全再定義　最終的に別ファイルに仕分ける
 Window_BattleLog.prototype.startAction = function(subject, action, targets) {
