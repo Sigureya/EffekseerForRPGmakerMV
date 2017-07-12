@@ -106,8 +106,6 @@ class EffekseerRenderer_ForRPGmakerMV extends PIXI.EffekseerRenderer{
 };
 
 class EffekseerManagerClass  {
-  constructor(){
-  }
 
 
 
@@ -120,6 +118,7 @@ class EffekseerManagerClass  {
 const Scene_Base_create=Scene_Base.prototype.create;
 Scene_Base.prototype.create = function(){
     Scene_Base_create.call(this);
+    this._effekseerLayer=new Sprite();
 };
 
 const Scene_Base_createWindowLayer =Scene_Base.prototype.createWindowLayer;
@@ -131,11 +130,15 @@ Scene_Base.prototype.createEffekseerLayer =function(){
     if(effekseerRendererObject){        
         this.addChild(effekseerRendererObject);
     }
+    if(this._effekseerLayer){
+        this.addChild(this._effekseerLayer);
+    }
 };
 
 // これ、何かに使うかもしれない
+// scene_battleはこれ必須？
 Scene_Base.prototype.addEFK=function(efk){
-//    this._effekseerLayer.addChild(efk);
+    this._effekseerLayer.addChild(efk);
 
 };
 
@@ -144,6 +147,8 @@ Scene_Base.prototype.update =function(){
     EffekseerManager.update();
     Scene_Base_update.call(this);
 };
+
+
 const EffekseerManager = new EffekseerManagerClass();
 const effekseerRendererObject = new EffekseerRenderer_ForRPGmakerMV();
 const zz_Scene_Boot_loadSystemImages = Scene_Boot.loadSystemImages;
@@ -151,7 +156,12 @@ Scene_Boot.loadSystemImages= function() {
     zz_Scene_Boot_loadSystemImages.apply(this,arguments);
     effekseer.init(Graphics._renderer.gl);
 };
+Sprite_Base.prototype.startEffekseer =function(efk){
+    this.parent.addChild(efk);
+    this._animationSprites.push(efk);
+};
 
+//--Character--//
 const Game_CharacterBase_initMembers =Game_CharacterBase.prototype.initMembers;
 Game_CharacterBase.prototype.initMembers = function(){
     Game_CharacterBase_initMembers.call(this);
@@ -174,17 +184,12 @@ Sprite_Character.prototype.update= function(){
     Sprite_Character_update.call(this);
     this.updateEffekseer();
 };
-Sprite_Character.prototype.startEffekseer =function(filePath){
-    const efk = new Sprite_Effekseer(filePath);
-    this.parent.addChild(efk);
-    const x = this.x;
-    const y = this.y;
-    efk.setPosition(x,y);
-    this._animationSprites.push(efk);
-};
 Sprite_Character.prototype.setupEffekseer=function(){
     if(this._character._effekseer){
-        this.startEffekseer (EffekseerManager.toFilePath( this._character._effekseer ) );
+        const path = EffekseerManager.toFilePath( this._character._effekseer );
+        const efk = new Sprite_Effekseer(path);
+        efk.setPosition(this.x,this.y);
+        this.startEffekseer ( efk);
         this._character.startEffekseer();
     }
 };
@@ -217,6 +222,7 @@ Game_Interpreter.prototype.effekseerNew =function(name,character,needWait){
 
 const Game_Interpreter_pluginCommand=Game_Interpreter.prototype.pluginCommand;
 Game_Interpreter.prototype.pluginCommand = function(command, args) {
+
     if(command ==='effekseer'){
         const name = args[0];
         switch (name) {
@@ -334,78 +340,60 @@ Scene_Menu.prototype.onPersonalOk =function(){
 Scene_Menu.prototype.commandBattleHistory = function(){
         SceneManager.push(Scene_EffekseerTest);
 };
-const Scene_Battle_isAnyInputWindowActive = Scene_Battle.prototype.isAnyInputWindowActive;
-Scene_Battle.prototype.isAnyInputWindowActive =function(){
-    return Scene_Battle_isAnyInputWindowActive.call(this) ||
-     this._effectSelectWindow.active;
 
-};
-
-const Window_PartyCommand_makeCommandList =Window_PartyCommand.prototype.makeCommandList;
-Window_PartyCommand.prototype.makeCommandList =function(){
-    Window_PartyCommand_makeCommandList.call(this);
-        this.addCommand('effekseer','efk');
-};
-Scene_Battle.prototype.commandEffekseer =function(){
-    this._effectSelectWindow.refresh();
-    this._effectSelectWindow.show();
-    this._effectSelectWindow.activate();
-
-};
-const Scene_Battle_createAllWindows =Scene_Battle.prototype.createAllWindows;
-Scene_Battle.prototype.createAllWindows=function(){
-    Scene_Battle_createAllWindows.call(this);
-    this.createEffectSelectWindow();
-
-};
-
-
-Scene_Battle.prototype.createEffectSelectWindow=function(){
-    const wc = new Window_efkSelect(0,0,400,400);
-    wc.makeCommandList();
-    wc.hide();
-
-    wc.deactivate();
-    wc.setHandler('ok',this.onEffectOK.bind(this));
-//    wc.setHandler( 'cancel',this.popScene.bind(this) );
-    this.addWindow(wc);
-    this._effectSelectWindow =wc;
-    this._partyCommandWindow.setHandler('efk',this.commandEffekseer.bind(this));
-};
-
-Game_Enemy.prototype.effekseerTargetPosition =function(){
+Game_Battler.prototype.effekseerTargetPosition =function(){
     return {
         x:this._screenX,
         y:this._screenY,
     };
 };
 
+//--Battler--//
 const Game_Battler_initMembers=Game_Battler.prototype.initMembers;
 Game_Battler.prototype.initMembers =function(){
     Game_Battler_initMembers.call(this);
     this._effekseer=[];
 
 };
+Game_Battler.prototype.shiftEffekseerAnimation =function(){
+    return this._effekseer.shift();
+};
 
-
+Game_Battler.prototype.clearEffekseerAnimations = function() {
+    this._effekseer = [];
+};
+Game_Battler.prototype.isEffekseerAnimationRequested =function(){
+    return this._effekseer.length >0;
+};
 
 Game_Battler.prototype.startEffekseerAnimation =function(efkName){
+    const data = {
+        name :efkName,
+    };
+    this._effekseer.push(data);
+};
+const Sprite_Battler_updateAnimation=Sprite_Battler.prototype.updateAnimation;
 
-
-//通常アニメはこうなってる
-//    var data = { animationId: animationId, mirror: mirror, delay: delay };
-//     this._animations.push(data);
+Sprite_Battler.prototype.updateAnimation =function(){
+    Sprite_Battler_updateAnimation.call(this);
+    this.updateEffekseer();
+};
+Sprite_Battler.prototype.updateEffekseer =function(){
+    this.setupEffekseer();
 
 };
 
-//Scene_Battle.prototype.
-Scene_Battle.prototype.onEffectOK =function(){
-    this._effectSelectWindow.activate();
-    const fileName = this._effectSelectWindow.currentSymbol();
-    const enemy = $gameTroop.members()[0];
-    const efk =new Sprite_Effekseer(fileName);
-    this.addEFK(efk);
+Sprite_Battler.prototype.setupEffekseer =function(){
+    while(this._battler.isEffekseerAnimationRequested()){
+        const e = this._battler.shiftEffekseerAnimation();
+        const efk = new Sprite_Effekseer(e.name);
+        efk.setPosition(this.x,this.y);
+        this.startEffekseer(efk);
+    }
+
 };
+
+
 //完全再定義　最終的に別ファイルに仕分ける
 Window_BattleLog.prototype.startAction = function(subject, action, targets) {
     var item = action.item();
@@ -423,14 +411,13 @@ BattleManager.isBusy = function(){
 };
 
 Window_BattleLog.prototype.showEffekseerAnimation=function(action,targets){
-    this;
-
-
-
-    // targets.forEach(
-    //     function(target){
-    //         target.startEffekseerAnimation(effekseerName);
-    //     } );
+    const item = action.item();
+    if(item.meta.effekseer){
+        const path = EffekseerManager.toFilePath(item.meta.effekseer);
+        targets.forEach(function(battler) {
+            battler.startEffekseerAnimation(path);
+        }, this);
+    }
 };
 
 
