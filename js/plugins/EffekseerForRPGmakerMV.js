@@ -171,7 +171,7 @@ function fuctoryCreateNormal(path,param){
 * @param {EffekseerCreateParamater} param Y value of target location
 * @return {Sprite_Effekseer} 
 */
-function fuctoryCreateAim(path,param){
+function fuctoryCreateAim_0(path,param){
     var v1 = param.targetPosition;
     var v2 = param.userPosition;
     const dirV = v1.clone();
@@ -185,7 +185,25 @@ function fuctoryCreateAim(path,param){
     efk.setPosition(v2.x,v2.y);
     return efk;
 }
+//どっちの実装にするか後で決める
+function fuctoryCreateAim(path,param){
+    var v1 = param.targetPosition;
+    var v2 = param.userPosition;
+    const dirV = v1.clone();
+    dirV.sub(v2);
+    dirV.normalize();
 
+
+    const radian = dirV.toRadian();
+    const r = dirV.atan2();
+    var efk = new Sprite_Effekseer(path);
+    efk.setRotation(r,90,0);
+    efk.setPosition(v2.x,v2.y);
+    return efk;
+}
+
+	
+	
 // 生成処理は、読み込み・パラメータによる初期化
 //
 function toEffekseerFilePath(name){
