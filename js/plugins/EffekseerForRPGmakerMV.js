@@ -59,13 +59,23 @@
 
 
 (function(global){
-     'use strict'
-     const effekseerStr = 'effekseer';
+'use strict'
+const effekseerStr = 'effekseer';
+const effektList =[
+    'Laser01',
+    'Laser02',
+    'block',
+    'Simple_Ribbon_Parent',
+    'Simple_Ribbon_Sword',
+    'Simple_Ring_Shape1',
+    'Simple_Sprite_FixedYAxis',
+    'Simple_Track1',
+];
 
-    const xxx={
-        commandKey :'key',
-        commandName:'エフェクトテスト',
-    };
+const xxx={
+    commandKey :'key',
+    commandName:'エフェクトテスト',
+};
 
 class Sprite_Effekseer extends PIXI.EffekseerEmitter{
     constructor(path){
@@ -82,7 +92,6 @@ class Sprite_Effekseer extends PIXI.EffekseerEmitter{
         }
     }
 
-
     _update(){
         super._update();
         this._frame +=1;
@@ -94,8 +103,6 @@ class Sprite_Effekseer extends PIXI.EffekseerEmitter{
     setTargetBattler(battler){
         this._target =battler;
     }
-
-
 };
 
 class EffekseerRenderer_ForRPGmakerMV extends PIXI.EffekseerRenderer{
@@ -105,13 +112,189 @@ class EffekseerRenderer_ForRPGmakerMV extends PIXI.EffekseerRenderer{
 
 };
 
-class EffekseerManagerClass  {
+class Vector2{
+    constructor(x,y){
+        this.x = Number(x ||0);
+        this.y = Number(y ||0);
+    }
+    
+    sub(v){
+        this.x -=v.x;
+        this.y -=v.y;
+    }
+    add(v){
+        this.x +=v.x;
+        this.y += v.y;
+    }
+    dot(v){
+        return this.x *v.x + this.y * v.y;
+    }
+    lengthSQ(){
+        return this.dot(this);
+    }
+    length(){
+        return Math.sqrt( this.lengthSQ() );
+    }
+    normalize(){
+        const len = this.length();
+        this.x /=len;
+        this.y /=len;
+    }
+    normalized(){
+        var v = new Vector2(this.x,this.y);
+        v.normalize();
+        return v;
+    }
+
+    clone(){
+        return new Vector2(this.x,this.y);
+    }
+    // 単位ベクトル化されているなら、各軸にasin/acosしたもの返す
+    toRadian(){
+        var v = this.clone();
+        v.x = 180/Math.acos(v.x);
+        v.y = 180/Math.asin(v.y );
+        return v;
+    }
+};
 
 
+function fuctoryCreateNormal(path,param){
+    const efk =new Sprite_Effekseer(path);
+    const pos = param.targetPosition;
+    efk.setPosition(pos.x,pos.y );
+    return efk;
+}
+/**
+* Set the target location of this effect instance.
+* @param {String} path filePath
+* @param {EffekseerCreateParamater} param Y value of target location
+* @return {Sprite_Effekseer} 
+*/
+function fuctoryCreateAim(path,param){
+    var v1 = param.targetPosition;
+    var v2 = param.userPosition;
+    const dirV = v1.clone();
+    dirV.sub(v2);
+    dirV.normalize();
 
-  toFilePath(name){
+
+    const radian = dirV.toRadian();
+    var efk = new Sprite_Effekseer(path);
+    efk.setRotation(-radian.x,-radian.y,0);
+    efk.setPosition(v2.x,v2.y);
+    return efk;
+}
+
+// 生成処理は、読み込み・パラメータによる初期化
+//
+function toEffekseerFilePath(name){
     return 'Resource/'+name +'.efk';
-  }
+}
+
+
+class EffekseerFactoryItem{
+    /**
+     * Set the scale of this effect instance.
+     * @param {String} path effekseerFilePath(相対パス)
+     * @param {Function} func onCreateCallBackFunction;
+     */
+    constructor(path,func){
+        this._path =path;
+        this._loadFunction= func || function(path,param){
+            return fuctoryCreateNormal(path,param);
+        };
+    }
+    /** 
+    * @param {EffekseerCreateParamater} param
+    */
+    create(param){
+        return this._loadFunction(this._path,param);
+    }
+};
+
+class EffekseerCreateParamater{
+
+
+    /**
+	* Set the target location of this effect instance.
+	* @param {String} key X value of target location
+	* @param {Game_Action} action Z value of target location
+	* @param {Game_Battler[]} targets Y value of target location
+	*/
+    constructor(key,action){
+        this.key = String(key);
+//        this._targets = targets;
+        this.action =action;
+        this.targetSprite=null;
+        this.targetPosition = new Vector2(0,0);
+        this.userPosition = new Vector2(0,0);
+    }
+    
+
+    // userPosition(){
+    //     const subject = this.action.subject();
+    //     return new Vector2(
+
+    //     );
+
+    // }
+    // targetPosition(){
+    //     return new Vector2(
+    //         this.targetSprite.x,this.targetSprite.y
+    //     );
+    // }
+
+};
+
+class EffekseerManagerClass  {
+    constructor(){
+        this._factoryTable={};
+    }
+    addNomal(key){
+        this._factoryTable[key]=new EffekseerFactoryItem(
+            toEffekseerFilePath(key),
+            fuctoryCreateNormal        
+        );
+    }
+
+    addTargetAim(key){
+        this._factoryTable[key]=new EffekseerFactoryItem(
+            toEffekseerFilePath(key),
+            fuctoryCreateAim
+            // function(path,target,user){
+            //     var v1 = new Vector2(target.x,target.y);
+            //     var v2 = new Vector2(user.x,user.y);
+
+            //     var efk = new Sprite_Effekseer(path);
+            //     efk.setPosition(v1.x,v1.y);
+            //     return efk;
+            // }
+        );
+
+    }
+  /**
+	* @param {String} key
+	* @return {EffekseerFactoryItem} 
+	*/
+    fetchFactoryItem(key){
+        return this._factoryTable[key];
+    }
+
+  /**
+    * @param {String} key
+    * @param {EffekseerCreateParamater} param
+    
+	* @return {Sprite_Effekseer} 
+	*/
+    createEffekseer(param){
+        const item = this.fetchFactoryItem(param.key);
+        if(item){
+            return item.create(param);
+        }
+        return null;
+    }
+
   
   update(){}
 };
@@ -137,6 +320,7 @@ Scene_Base.prototype.createEffekseerLayer =function(){
 
 // これ、何かに使うかもしれない
 // scene_battleはこれ必須？
+// テスト用エフェクト表示ぐらいしか、使わない
 Scene_Base.prototype.addEFK=function(efk){
     this._effekseerLayer.addChild(efk);
 
@@ -155,6 +339,9 @@ const zz_Scene_Boot_loadSystemImages = Scene_Boot.loadSystemImages;
 Scene_Boot.loadSystemImages= function() {
     zz_Scene_Boot_loadSystemImages.apply(this,arguments);
     effekseer.init(Graphics._renderer.gl);
+    effektList.forEach(function(name){
+        EffekseerManager.addTargetAim(name);
+    });
 };
 Sprite_Base.prototype.startEffekseer =function(efk){
     this.parent.addChild(efk);
@@ -186,8 +373,7 @@ Sprite_Character.prototype.update= function(){
 };
 Sprite_Character.prototype.setupEffekseer=function(){
     if(this._character._effekseer){
-        const path = EffekseerManager.toFilePath( this._character._effekseer );
-        const efk = new Sprite_Effekseer(path);
+        const efk = EffekseerManager.createEffekseer(this._character._effekseer);
         efk.setPosition(this.x,this.y);
         this.startEffekseer ( efk);
         this._character.startEffekseer();
@@ -210,8 +396,15 @@ Game_Interpreter.prototype.updateWaitMode =function(){
     return  Game_Interpreter_updateWaitMode.call(this) ;
 };
 
+/**
+ * Set the rotation of this effect instance.
+* @param {String} name Y value of euler angle
+* @param {Game_CharacterBase} character X value of euler angle
+* @param {boolean} needWait Z value of euler angle
+*/
 Game_Interpreter.prototype.effekseerNew =function(name,character,needWait){
     this._character =character;
+
 
     character.requestEffekseer( name);
     if(needWait){
@@ -237,16 +430,6 @@ Game_Interpreter.prototype.pluginCommand = function(command, args) {
         Game_Interpreter_pluginCommand.apply(this,arguments);
     }
 };
-const effektList =[
-    'Laser01',
-    'Laser02',
-    'block',
-    'Simple_Ribbon_Parent',
-    'Simple_Ribbon_Sword',
-    'Simple_Ring_Shape1',
-    'Simple_Sprite_FixedYAxis',
-    'Simple_Track1',
-];
 
 class Window_efkSelect extends Window_Command{
     constructor(x,y,w,h){
@@ -341,11 +524,8 @@ Scene_Menu.prototype.commandBattleHistory = function(){
         SceneManager.push(Scene_EffekseerTest);
 };
 
-Game_Battler.prototype.effekseerTargetPosition =function(){
-    return {
-        x:this._screenX,
-        y:this._screenY,
-    };
+Game_Battler.prototype.targetPosition =function(){
+    return new Vector2(this._screenX,this._screenY);
 };
 
 //--Battler--//
@@ -355,6 +535,8 @@ Game_Battler.prototype.initMembers =function(){
     this._effekseer=[];
 
 };
+
+
 Game_Battler.prototype.shiftEffekseerAnimation =function(){
     return this._effekseer.shift();
 };
@@ -366,14 +548,21 @@ Game_Battler.prototype.isEffekseerAnimationRequested =function(){
     return this._effekseer.length >0;
 };
 
-Game_Battler.prototype.startEffekseerAnimation =function(efkName){
-    const data = {
-        name :efkName,
-    };
-    this._effekseer.push(data);
-};
-const Sprite_Battler_updateAnimation=Sprite_Battler.prototype.updateAnimation;
+Game_Battler.prototype.startEffekseerAnimation =function(param){
+    param.targetPosition.x = this._effekseerX;
+    param.targetPosition.y = this._effekseerY;
 
+
+    this._effekseer.push(param);
+};
+const Sprite_Battler_updatePosition=Sprite_Battler.prototype.updatePosition;
+Sprite_Battler.prototype.updatePosition =function(){
+    Sprite_Battler_updatePosition.call(this);
+    this._battler._effekseerX = this.x;
+    this._battler._effekseerY = this.y;
+};
+
+const Sprite_Battler_updateAnimation=Sprite_Battler.prototype.updateAnimation;
 Sprite_Battler.prototype.updateAnimation =function(){
     Sprite_Battler_updateAnimation.call(this);
     this.updateEffekseer();
@@ -386,8 +575,7 @@ Sprite_Battler.prototype.updateEffekseer =function(){
 Sprite_Battler.prototype.setupEffekseer =function(){
     while(this._battler.isEffekseerAnimationRequested()){
         const e = this._battler.shiftEffekseerAnimation();
-        const efk = new Sprite_Effekseer(e.name);
-        efk.setPosition(this.x,this.y);
+        const efk = EffekseerManager.createEffekseer(e);
         this.startEffekseer(efk);
     }
 
@@ -412,11 +600,23 @@ BattleManager.isBusy = function(){
 
 Window_BattleLog.prototype.showEffekseerAnimation=function(action,targets){
     const item = action.item();
+    // ここでパラメータアイテムを作ってしまう
+
     if(item.meta.effekseer){
-        const path = EffekseerManager.toFilePath(item.meta.effekseer);
+//        action.subject().startEffekseerAnimation(param);
+//        const name = item.meta.effekseer;
+//        const path = toEffekseerFilePath(item.meta.effekseer);
         targets.forEach(function(battler) {
-            battler.startEffekseerAnimation(path);
-        }, this);
+            const param = new EffekseerCreateParamater(
+                item.meta.effekseer,
+                action,
+                targets
+            );
+            const user = action.subject();
+            param.userPosition.x = user._effekseerX;
+            param.userPosition.y = user._effekseerY;
+            battler.startEffekseerAnimation(param);
+        });
     }
 };
 
